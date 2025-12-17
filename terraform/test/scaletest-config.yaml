@@ -1,0 +1,183 @@
+# Coder Scale Test Configuration
+# Reference: https://coder.com/docs/admin/infrastructure/scale-utility
+#
+# This configuration file defines parameters for Coder's built-in scale testing
+# utilities to validate capacity and performance requirements.
+#
+# Requirements validated:
+# - 14.6: Pod workspace provisioning < 2 minutes
+# - 14.7: EC2 workspace provisioning < 5 minutes
+# - 14.9: P95 API response time < 500ms
+# - 14.10: P99 API response time < 1 second
+# - 14.11: Support 1000 simultaneous workspace provisioning operations
+
+# =============================================================================
+# Workspace Creation Scale Test
+# =============================================================================
+# Validates: Req 14.11 (1000 concurrent provisioning operations)
+#            Req 14.6 (pod provisioning < 2 min)
+#            Req 14.7 (EC2 provisioning < 5 min)
+#
+# Command: coder scaletest create-workspaces --config scaletest-config.yaml
+create_workspaces:
+  # Total number of workspaces to create
+  count: 1000
+  
+  # Template to use for workspace creation
+  # Use pod-based template for faster provisioning validation
+  template: pod-swdev
+  
+  # Number of concurrent workspace creation operations
+  # Balances load generation with API stability
+  concurrency: 100
+  
+  # Maximum time to wait for all workspaces to be created
+  timeout: 30m
+  
+  # Cleanup workspaces after test completion
+  cleanup: true
+  
+  # Wait for workspace to be fully running before counting as success
+  wait_for_ready: true
+  
+  # Parameters to pass to the template
+  parameters: {}
+  
+  # Rich parameters (if template supports them)
+  rich_parameters: {}
+
+# =============================================================================
+# Workspace Traffic Scale Test
+# =============================================================================
+# Validates: Network throughput and workspace connectivity under load
+#
+# Command: coder scaletest workspace-traffic --config scaletest-config.yaml
+workspace_traffic:
+  # Bytes to send per tick interval
+  bytes_per_tick: 1024
+  
+  # Interval between traffic bursts
+  tick_interval: 100ms
+  
+  # Total duration of the traffic test
+  duration: 10m
+  
+  # Number of concurrent connections
+  concurrency: 50
+  
+  # Template to use for traffic test workspaces
+  template: pod-swdev
+
+# =============================================================================
+# Dashboard Load Scale Test
+# =============================================================================
+# Validates: Req 14.9 (P95 < 500ms), Req 14.10 (P99 < 1s)
+#
+# Command: coder scaletest dashboard --config scaletest-config.yaml
+dashboard:
+  # Number of concurrent simulated users
+  concurrency: 50
+  
+  # Duration of the dashboard load test
+  duration: 5m
+  
+  # Interval between requests per simulated user
+  request_interval: 1s
+  
+  # Include workspace list API calls
+  include_workspace_list: true
+  
+  # Include template list API calls
+  include_template_list: true
+  
+  # Include user info API calls
+  include_user_info: true
+
+# =============================================================================
+# Performance Acceptance Criteria
+# =============================================================================
+# These thresholds define pass/fail criteria for scale tests
+acceptance_criteria:
+  # Workspace provisioning time targets
+  provisioning:
+    # Pod-based workspaces (Kubernetes)
+    pod_p95_seconds: 120  # < 2 minutes
+    pod_p99_seconds: 180  # < 3 minutes (buffer)
+    
+    # EC2-based workspaces
+    ec2_p95_seconds: 300  # < 5 minutes
+    ec2_p99_seconds: 420  # < 7 minutes (buffer)
+    
+    # GPU workspaces (not pre-warmed)
+    gpu_p95_seconds: 300  # < 5 minutes
+    gpu_p99_seconds: 600  # < 10 minutes (availability dependent)
+  
+  # API latency targets
+  api_latency:
+    p95_milliseconds: 500   # < 500ms
+    p99_milliseconds: 1000  # < 1 second
+  
+  # Concurrent operations
+  concurrent_operations:
+    min_supported: 1000  # Must support 1000 simultaneous operations
+  
+  # Success rate thresholds
+  success_rate:
+    workspace_creation: 0.99  # 99% success rate
+    api_requests: 0.999       # 99.9% success rate
+
+# =============================================================================
+# Test Environment Configuration
+# =============================================================================
+environment:
+  # Coder deployment URL (set via CODER_URL environment variable)
+  # url: https://coder.example.com
+  
+  # Output format for results
+  output_format: json
+  
+  # Output file for detailed results
+  output_file: scaletest-results.json
+  
+  # Enable verbose logging
+  verbose: false
+  
+  # Trace ID prefix for correlation
+  trace_prefix: "scaletest"
+
+# =============================================================================
+# Template-Specific Test Configurations
+# =============================================================================
+# Override settings for specific template types
+template_overrides:
+  # Pod-based workspace tests
+  pod-swdev:
+    create_workspaces:
+      timeout: 15m
+      concurrency: 100
+    acceptance_criteria:
+      provisioning_p95_seconds: 120
+  
+  # EC2 Linux workspace tests
+  ec2-datasci:
+    create_workspaces:
+      timeout: 45m
+      concurrency: 50
+    acceptance_criteria:
+      provisioning_p95_seconds: 300
+  
+  # EC2 Windows workspace tests
+  ec2-windev-gui:
+    create_workspaces:
+      timeout: 45m
+      concurrency: 25
+    acceptance_criteria:
+      provisioning_p95_seconds: 300
+  
+  # GPU workspace tests
+  ec2-datasci-gpu:
+    create_workspaces:
+      timeout: 60m
+      concurrency: 10
+    acceptance_criteria:
+      provisioning_p95_seconds: 300

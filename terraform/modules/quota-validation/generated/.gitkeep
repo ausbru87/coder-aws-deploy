@@ -1,0 +1,2 @@
+# This directory contains generated files from the quota validation module
+# The quota-requirements.json file is generated during terraform plan/apply

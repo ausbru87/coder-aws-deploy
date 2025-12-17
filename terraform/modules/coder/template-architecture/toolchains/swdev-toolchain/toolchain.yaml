@@ -1,0 +1,242 @@
+# Software Development Toolchain Template
+# Version: 1.0.0
+#
+# This is a portable toolchain template that declares what a software development
+# workspace should contain (languages, tools, dependencies, capabilities) without
+# specifying how it runs.
+#
+# Requirements Covered:
+# - 11.4: Software development toolchain template
+# - 11c.2: Toolchain template declares capabilities without infrastructure details
+# - 11c.3: Toolchain manifest declaring tools, versions, and capability requirements
+# - 11c.4: Define capabilities (compute profile, network egress, persistent home)
+# - 11f.1: Write toolchain templates once without infrastructure-specific details
+# - 11f.2: Declare required capabilities and toolchain dependencies
+
+name: swdev-toolchain
+version: "1.0.0"
+description: |
+  Software development workspace toolchain for general-purpose development.
+  Includes Go, Node.js, Python, and common DevOps tools.
+  Suitable for backend development, API development, and infrastructure work.
+
+# ============================================================================
+# TOOLCHAIN DEFINITION
+# Languages, tools, and libraries included in this toolchain
+# ============================================================================
+toolchain:
+  languages:
+    - name: go
+      version: "1.23"
+      description: "Go programming language for backend and CLI development"
+      
+    - name: node
+      version: "22"
+      description: "Node.js runtime for JavaScript/TypeScript development"
+      package_manager: npm
+      
+    - name: python
+      version: "3.12"
+      description: "Python for scripting, automation, and general development"
+      package_manager: pip
+
+  tools:
+    - name: terraform
+      version: "latest"
+      description: "Infrastructure as Code tool"
+      
+    - name: kubectl
+      version: "latest"
+      description: "Kubernetes CLI"
+      
+    - name: gh
+      version: "latest"
+      description: "GitHub CLI for repository management"
+      
+    - name: docker-cli
+      version: "latest"
+      description: "Docker CLI for container operations"
+      notes: "Requires Docker socket access or Docker-in-Docker"
+
+    - name: git
+      version: "latest"
+      description: "Version control system"
+
+    - name: make
+      version: "latest"
+      description: "Build automation tool"
+
+    - name: jq
+      version: "latest"
+      description: "JSON processor"
+
+    - name: yq
+      version: "latest"
+      description: "YAML processor"
+
+  # Optional tools that can be enabled via configuration
+  optional_tools:
+    - name: aws-cli
+      version: "2"
+      description: "AWS Command Line Interface"
+      
+    - name: helm
+      version: "latest"
+      description: "Kubernetes package manager"
+      
+    - name: k9s
+      version: "latest"
+      description: "Kubernetes TUI"
+
+# ============================================================================
+# CAPABILITY REQUIREMENTS
+# Capabilities this toolchain requires from infrastructure base modules
+# ============================================================================
+capabilities:
+  required:
+    - persistent-home    # Persist /home/coder across restarts
+    - outbound-https     # HTTPS egress for package downloads, Git operations
+
+  optional:
+    - gui-vnc            # Optional VNC desktop for GUI applications
+
+  # Network egress policy
+  network_egress: https-only
+
+  # Identity mode preference (infrastructure base may override)
+  identity_mode: iam
+
+  # Secrets injection preference
+  secrets_injection: variables
+
+# ============================================================================
+# COMPUTE PROFILES
+# T-shirt sizes available for this toolchain
+# ============================================================================
+compute_profiles:
+  sw-dev-small:
+    cpu: 2
+    memory: "4Gi"
+    storage: "20Gi"
+    gpu_count: 0
+    description: "Light development - code editing, small builds"
+    
+  sw-dev-medium:
+    cpu: 4
+    memory: "8Gi"
+    storage: "50Gi"
+    gpu_count: 0
+    description: "Standard development - typical workloads"
+    default: true
+    
+  sw-dev-large:
+    cpu: 8
+    memory: "16Gi"
+    storage: "100Gi"
+    gpu_count: 0
+    description: "Heavy development - large builds, multiple services"
+    
+  platform-devsecops:
+    cpu: 4
+    memory: "8Gi"
+    storage: "100Gi"
+    gpu_count: 0
+    description: "Platform engineering and DevSecOps work"
+
+# ============================================================================
+# BOOTSTRAP CONFIGURATION
+# Initialization scripts and environment setup
+# ============================================================================
+bootstrap:
+  # Script to run on workspace start
+  startup_script: |
+    #!/bin/bash
+    set -e
+    
+    # Configure Git if not already configured
+    if [ -z "$(git config --global user.email)" ]; then
+      echo "Git user.email not configured - will be set via Coder external auth"
+    fi
+    
+    # Ensure common directories exist
+    mkdir -p ~/projects ~/bin ~/.local/bin
+    
+    # Add local bin to PATH if not present
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+      export PATH="$HOME/.local/bin:$PATH"
+    fi
+    
+    # Source any custom profile
+    if [ -f ~/.profile.d/custom.sh ]; then
+      source ~/.profile.d/custom.sh
+    fi
+    
+    echo "Software development workspace ready!"
+
+  # Environment variables to set
+  environment:
+    EDITOR: "code --wait"
+    VISUAL: "code --wait"
+    GOPATH: "$HOME/go"
+    PATH: "$HOME/go/bin:$HOME/.local/bin:$PATH"
+
+# ============================================================================
+# VALIDATION
+# Tests to verify toolchain is correctly configured
+# ============================================================================
+validation:
+  # Commands that must succeed for the toolchain to be considered valid
+  health_checks:
+    - name: go_version
+      command: "go version"
+      expected_pattern: "go1\\.23"
+      
+    - name: node_version
+      command: "node --version"
+      expected_pattern: "v22\\."
+      
+    - name: python_version
+      command: "python3 --version"
+      expected_pattern: "Python 3\\.12"
+      
+    - name: terraform_available
+      command: "terraform version"
+      expected_pattern: "Terraform v"
+      
+    - name: kubectl_available
+      command: "kubectl version --client"
+      expected_pattern: "Client Version"
+      
+    - name: gh_available
+      command: "gh --version"
+      expected_pattern: "gh version"
+      
+    - name: docker_cli_available
+      command: "docker --version"
+      expected_pattern: "Docker version"
+
+# ============================================================================
+# METADATA
+# Additional information about this toolchain
+# ============================================================================
+metadata:
+  maintainer: "platform-team"
+  license: "MIT"
+  repository: "https://github.com/org/toolchain-templates"
+  documentation: "https://docs.example.com/toolchains/swdev"
+  
+  # Supported operating systems
+  supported_os:
+    - amazon-linux-2023
+    - ubuntu-22.04
+    - ubuntu-24.04
+    
+  # Tags for discovery
+  tags:
+    - software-development
+    - backend
+    - devops
+    - infrastructure
+    - go
+    - nodejs
+    - python
