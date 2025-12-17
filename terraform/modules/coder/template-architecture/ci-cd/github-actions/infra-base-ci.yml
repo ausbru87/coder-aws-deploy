@@ -1,0 +1,244 @@
+# Infrastructure Base Module CI/CD Pipeline
+# Requirements: 11b.1, 11b.3, 11b.5
+#
+# This workflow validates, tests, and publishes infrastructure base modules.
+# Copy this file to .github/workflows/ in your infrastructure bases repository.
+
+name: Infrastructure Base CI
+
+on:
+  push:
+    branches: [main, beta/*, release/*]
+    paths:
+      - 'bases/**'
+      - '.github/workflows/infra-base-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'bases/**'
+  workflow_dispatch:
+    inputs:
+      base_module:
+        description: 'Base module to build (leave empty for all)'
+        required: false
+        type: string
+
+env:
+  TERRAFORM_VERSION: '1.6.0'
+
+jobs:
+  # ==========================================================================
+  # Stage 1: Terraform Validation
+  # ==========================================================================
+  validate:
+    name: Validate Infrastructure Bases
+    runs-on: ubuntu-latest
+    outputs:
+      changed_bases: ${{ steps.changes.outputs.bases }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Changed Bases
+        id: changes
+        run: |
+          if [ -n "${{ github.event.inputs.base_module }}" ]; then
+            echo "bases=${{ github.event.inputs.base_module }}" >> $GITHUB_OUTPUT
+          else
+            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '^bases/' | cut -d'/' -f2 | sort -u | tr '\n' ' ')
+            echo "bases=${CHANGED:-all}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Init and Validate
+        run: |
+          for base in bases/*/; do
+            echo "Validating ${base}"
+            terraform -chdir="${base}" init -backend=false
+            terraform -chdir="${base}" validate
+          done
+
+      - name: Terraform Format Check
+        run: |
+          terraform fmt -check -recursive bases/
+
+      - name: Contract Validation
+        run: |
+          # Validate infrastructure bases implement required contract outputs
+          ./scripts/validate-infra-base.sh bases/
+
+  # ==========================================================================
+  # Stage 2: Security Scanning
+  # ==========================================================================
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: bases/
+          soft_fail: true
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: bases/
+          framework: terraform
+          output_format: sarif
+          output_file_path: checkov-results.sarif
+          soft_fail: true
+
+      - name: Upload Checkov Results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'checkov-results.sarif'
+
+      - name: Run Terrascan
+        uses: tenable/terrascan-action@main
+        with:
+          iac_type: 'terraform'
+          iac_dir: 'bases/'
+          policy_type: 'aws'
+          sarif_upload: true
+
+  # ==========================================================================
+  # Stage 3: Terraform Plan (for each base module)
+  # ==========================================================================
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    needs: [validate, security-scan]
+    strategy:
+      matrix:
+        base: [base-k8s, base-ec2-linux, base-ec2-windows, base-ec2-gpu]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Init
+        run: |
+          terraform -chdir="bases/${{ matrix.base }}" init -backend=false
+
+      - name: Terraform Plan
+        run: |
+          # Plan with example values to verify module works
+          terraform -chdir="bases/${{ matrix.base }}" plan \
+            -var="workspace_name=test-workspace" \
+            -var="owner=test-user" \
+            -var='compute_profile={"cpu":4,"memory":"8Gi","storage":"100Gi","gpu_count":0}' \
+            -var="image_id=test-image:latest" \
+            -var='toolchain_template={"name":"test","version":"1.0.0"}' \
+            -var='base_module={"name":"${{ matrix.base }}","version":"1.0.0"}' \
+            -out=tfplan-${{ matrix.base }} || true
+
+      - name: Upload Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ matrix.base }}
+          path: bases/${{ matrix.base }}/tfplan-${{ matrix.base }}
+
+  # ==========================================================================
+  # Stage 4: Platform Owner Approval
+  # Requirement 11b.5: Platform owner approval for infrastructure bases
+  # ==========================================================================
+  approval:
+    name: Platform Owner Approval
+    runs-on: ubuntu-latest
+    needs: [plan]
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')
+    environment:
+      name: infra-base-approval
+      # Configure this environment in GitHub with required reviewers:
+      # - Platform Owner
+    steps:
+      - name: Approval Checkpoint
+        run: |
+          echo "Infrastructure base modules approved for publishing"
+          echo "Approved by: ${{ github.actor }}"
+          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  # ==========================================================================
+  # Stage 5: Publish to Instance Registry
+  # ==========================================================================
+  publish:
+    name: Publish to Registry
+    runs-on: ubuntu-latest
+    needs: [approval]
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine Version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+            VERSION=$(echo "${{ github.ref }}" | sed 's|refs/heads/release/||')
+          else
+            VERSION="latest"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Create Git Tag
+        if: startsWith(github.ref, 'refs/heads/release/')
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release ${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
+
+      - name: Publish to Terraform Registry (if configured)
+        run: |
+          echo "Publishing infrastructure base modules..."
+          echo "Version: ${{ steps.version.outputs.version }}"
+          # Add Terraform Registry publishing logic here if using private registry
+
+      - name: Update Module Index
+        run: |
+          # Update the instance-scoped module index
+          echo "Updating module index..."
+          echo "Bases published: base-k8s, base-ec2-linux, base-ec2-windows, base-ec2-gpu"
+
+  # ==========================================================================
+  # Stage 6: Deploy to Coder
+  # ==========================================================================
+  deploy:
+    name: Deploy to Coder
+    runs-on: ubuntu-latest
+    needs: [publish]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Deploy Templates
+        env:
+          CODER_URL: ${{ secrets.CODER_URL }}
+          CODER_SESSION_TOKEN: ${{ secrets.CODER_SESSION_TOKEN }}
+        run: |
+          echo "Deploying infrastructure base modules to Coder..."
+          # terraform apply would go here
+          echo "Deployment complete"

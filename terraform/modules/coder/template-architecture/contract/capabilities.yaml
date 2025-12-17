@@ -1,0 +1,268 @@
+# Capability Interface Definition
+# This schema defines the capabilities that toolchain templates can request
+# and infrastructure base modules must implement.
+# Version: 1.0
+#
+# Requirements Covered:
+# - 11c.4: Define capabilities (compute profile, network egress, persistent home, identity mode, etc.)
+# - 11d.2: Specify toolchain template capability requirements
+# - 11g.1: Toolchain templates declare capabilities via contract interface only
+
+capabilities:
+  version: "1.0"
+  description: |
+    Capabilities are workspace features that toolchain templates can request
+    and infrastructure base modules implement. This abstraction allows:
+    - Toolchain templates to remain infrastructure-agnostic
+    - Infrastructure bases to implement capabilities per environment
+    - Policy enforcement at the capability level
+
+  # ============================================================================
+  # CAPABILITY DEFINITIONS
+  # ============================================================================
+
+  persistent-home:
+    type: boolean
+    default: true
+    description: |
+      Persist the user's home directory (/home/coder) across workspace restarts.
+      When enabled, the infrastructure base module provisions persistent storage.
+    implementation_notes: |
+      - Kubernetes: PVC with EBS-backed StorageClass
+      - EC2 Linux: EBS gp3 volume mounted at /home/coder
+      - EC2 Windows: EBS gp3 volume for user profile data
+    requirements_ref: "11a.1"
+
+  network-egress:
+    type: string
+    enum:
+      - none           # No outbound internet access
+      - https-only     # HTTPS (443) egress only
+      - unrestricted   # Full outbound access (requires approval)
+    default: https-only
+    description: |
+      Controls outbound network access from the workspace.
+      Used to enforce network security policies.
+    implementation_notes: |
+      - Kubernetes: NetworkPolicy egress rules
+      - EC2: Security group outbound rules
+      - Proxy configuration for https-only mode
+    requirements_ref: "3.1d, 11c.4"
+
+  identity-mode:
+    type: string
+    enum:
+      - oidc              # OIDC token injection
+      - iam               # AWS IAM role (IRSA for K8s, instance role for EC2)
+      - workload-identity # Cloud-native workload identity
+    default: iam
+    description: |
+      Determines how the workspace authenticates to cloud services.
+      Infrastructure base modules implement the identity binding.
+    implementation_notes: |
+      - Kubernetes: Service account with IRSA annotation
+      - EC2: IAM instance profile with least-privilege role
+    requirements_ref: "11c.4, 11g.2"
+
+  gpu-support:
+    type: boolean
+    default: false
+    description: |
+      Request GPU resources for the workspace.
+      When enabled, compute_profile.gpu_count and gpu_type are used.
+    implementation_notes: |
+      - Kubernetes: Not supported (GPU workspaces use EC2)
+      - EC2: GPU instance types (g4dn, g5, p3, p4d)
+      - CUDA drivers and toolkit pre-installed
+    requirements_ref: "11.9, 14.7a"
+
+  artifact-cache:
+    type: boolean
+    default: false
+    description: |
+      Enable artifact caching for faster builds.
+      Provides shared cache storage for package managers and build tools.
+    implementation_notes: |
+      - Kubernetes: Shared PVC or EFS mount
+      - EC2: EFS mount or S3 cache bucket
+      - Cache paths: ~/.cache, ~/.npm, ~/.m2, ~/.gradle
+    requirements_ref: "11c.4"
+
+  secrets-injection:
+    type: string
+    enum:
+      - variables        # Coder workspace variables
+      - vault            # HashiCorp Vault integration
+      - secrets-manager  # AWS Secrets Manager
+    default: variables
+    description: |
+      Mechanism for injecting secrets into the workspace.
+      Determines how sensitive configuration is delivered.
+    implementation_notes: |
+      - variables: Coder native, stored in Coder DB
+      - vault: Vault Agent sidecar or init container
+      - secrets-manager: AWS SDK or CSI driver
+    requirements_ref: "11c.4, 3.4"
+
+  gui-vnc:
+    type: boolean
+    default: false
+    description: |
+      Enable VNC-based GUI access for Linux workspaces.
+      Provides graphical desktop environment via KasmVNC.
+    implementation_notes: |
+      - Kubernetes: KasmVNC sidecar container
+      - EC2 Linux: KasmVNC service
+      - Desktop environment: XFCE or similar lightweight DE
+    requirements_ref: "11.6"
+
+  gui-rdp:
+    type: boolean
+    default: false
+    description: |
+      Enable RDP-based GUI access for Windows workspaces.
+      Provides remote desktop via NICE DCV or WebRDP.
+    implementation_notes: |
+      - EC2 Windows only
+      - NICE DCV (recommended) or WebRDP
+      - Windows Server 2022 with Desktop Experience
+    requirements_ref: "11.6"
+
+  # ============================================================================
+  # COMPUTE PROFILES
+  # Predefined t-shirt sizes that map to compute_profile inputs
+  # ============================================================================
+
+  compute_profiles:
+    description: |
+      Predefined compute profiles (t-shirt sizes) that toolchain templates
+      can reference. Infrastructure bases map these to actual resources.
+
+    sw-dev-small:
+      cpu: 2
+      memory: "4Gi"
+      storage: "20Gi"
+      gpu_count: 0
+      description: "Light development workloads"
+      requirements_ref: "14.16"
+
+    sw-dev-medium:
+      cpu: 4
+      memory: "8Gi"
+      storage: "50Gi"
+      gpu_count: 0
+      description: "Standard development workloads"
+      requirements_ref: "14.16"
+
+    sw-dev-large:
+      cpu: 8
+      memory: "16Gi"
+      storage: "100Gi"
+      gpu_count: 0
+      description: "Heavy development workloads"
+      requirements_ref: "14.16"
+
+    platform-devsecops:
+      cpu: 4
+      memory: "8Gi"
+      storage: "100Gi"
+      gpu_count: 0
+      description: "Platform engineering and DevSecOps"
+      requirements_ref: "14.16"
+
+    datasci-standard:
+      cpu: 8
+      memory: "32Gi"
+      storage: "500Gi"
+      gpu_count: 0
+      description: "Data analysis without GPU"
+      requirements_ref: "14.16"
+
+    datasci-large:
+      cpu: 16
+      memory: "64Gi"
+      storage: "1Ti"
+      gpu_count: 1
+      gpu_type: nvidia-t4
+      description: "ML training with single GPU"
+      requirements_ref: "14.16"
+
+    datasci-xlarge:
+      cpu: 32
+      memory: "64Gi"
+      storage: "2Ti"
+      gpu_count: 4
+      gpu_type: nvidia-a100
+      description: "Large-scale ML with multiple GPUs"
+      requirements_ref: "14.16"
+
+  # ============================================================================
+  # CAPABILITY CONSTRAINTS
+  # Rules for capability combinations and restrictions
+  # ============================================================================
+
+  constraints:
+    description: |
+      Constraints define valid capability combinations and restrictions.
+      Used during composition validation.
+
+    mutual_exclusions:
+      - capabilities: [gui-vnc, gui-rdp]
+        reason: "Cannot enable both VNC and RDP GUI modes"
+
+    implications:
+      - if:
+          gpu-support: true
+        then:
+          network-egress: [https-only, unrestricted]
+        reason: "GPU workspaces require network access for CUDA/driver downloads"
+
+    platform_restrictions:
+      kubernetes:
+        supported:
+          - persistent-home
+          - network-egress
+          - identity-mode
+          - artifact-cache
+          - secrets-injection
+          - gui-vnc
+        not_supported:
+          - gpu-support  # GPU workspaces use EC2
+          - gui-rdp      # Windows not supported on K8s
+
+      ec2-linux:
+        supported:
+          - persistent-home
+          - network-egress
+          - identity-mode
+          - artifact-cache
+          - secrets-injection
+          - gui-vnc
+          - gpu-support
+        not_supported:
+          - gui-rdp
+
+      ec2-windows:
+        supported:
+          - persistent-home
+          - network-egress
+          - identity-mode
+          - secrets-injection
+          - gui-rdp
+        not_supported:
+          - gui-vnc
+          - gpu-support  # Windows GPU not in scope
+          - artifact-cache
+
+      ec2-gpu:
+        supported:
+          - persistent-home
+          - network-egress
+          - identity-mode
+          - artifact-cache
+          - secrets-injection
+          - gui-vnc
+          - gpu-support
+        not_supported:
+          - gui-rdp
+
