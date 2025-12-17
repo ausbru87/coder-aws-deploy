@@ -4,6 +4,20 @@ This document outlines the tools, AWS configurations, service quotas, licenses, 
 
 **Target Audience:** DevSecOps Engineers L1-5, SysAdmins L3-L6
 
+## ⚠️ Order of Operations
+
+**IMPORTANT:** Complete prerequisites in this specific order:
+
+1. **[Required Tools](#required-tools)** - Install Terraform, AWS CLI, kubectl, helm (15 min)
+2. **[AWS Account Configuration](#aws-account-configuration)** - Configure IAM access (10 min)
+3. **[AWS Service Quotas](#aws-service-quotas)** - Verify and request quota increases (varies)
+4. **[Coder License Requirements](#coder-license-requirements)** - Obtain license from Coder (1-2 business days)
+5. **[DNS and Certificate Requirements](#dns-and-certificate-requirements)** - Prepare domain and decide on Coder URL (5 min)
+6. **[Identity Provider Requirements](#identity-provider-requirements)** - Set up OIDC application with correct redirect URI (20-30 min)
+7. **Create AWS Secrets** - Store OIDC credentials and license in Secrets Manager (5 min)
+
+**Then proceed to:** [Day 0: Infrastructure Deployment](../operations/day0-deployment.md)
+
 ## Table of Contents
 
 1. [Required Tools](#required-tools)
@@ -20,9 +34,9 @@ Before deploying, ensure the following tools are installed and configured:
 | Tool | Minimum Version | Purpose | Installation |
 |------|-----------------|---------|--------------|
 | AWS CLI | 2.x | AWS resource management | [AWS CLI Install](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) |
-| Terraform | 1.5.0+ | Infrastructure provisioning | [Terraform Install](https://developer.hashicorp.com/terraform/install) |
-| kubectl | 1.28+ | Kubernetes management | [kubectl Install](https://kubernetes.io/docs/tasks/tools/) |
-| Helm | 3.0+ | Chart deployments | [Helm Install](https://helm.sh/docs/intro/install/) |
+| Terraform | 1.14.0+ | Infrastructure provisioning | [Terraform Install](https://developer.hashicorp.com/terraform/install) |
+| kubectl | 1.31+ | Kubernetes management | [kubectl Install](https://kubernetes.io/docs/tasks/tools/) |
+| Helm | 3.1+ | Chart deployments | [Helm Install](https://helm.sh/docs/intro/install/) |
 | jq | 1.6+ | JSON processing | `brew install jq` or package manager |
 
 ### Verify Installations
@@ -233,11 +247,34 @@ aws acm request-certificate \
 # Certificate ARN will be used in deployment
 ```
 
+### Understanding Your Coder URL (Critical for OIDC Setup)
+
+**Before setting up OIDC,** you need to determine your Coder URL. This is calculated from two Terraform variables:
+
+| Variable | Example Value | Description |
+|----------|---------------|-------------|
+| `base_domain` | `example.com` | Your Route 53 hosted zone |
+| `coder_subdomain` | `coder` | Subdomain for Coder platform |
+
+**Resulting Coder URL:** `https://coder.example.com`
+
+**OIDC Redirect URI Formula:**
+```
+https://<coder_subdomain>.<base_domain>/api/v2/users/oidc/callback
+```
+
+**Example:**
+- If `base_domain = "example.com"` and `coder_subdomain = "coder"`
+- Your redirect URI will be: `https://coder.example.com/api/v2/users/oidc/callback`
+
+**⚠️ You must use this exact redirect URI when configuring your OIDC application in Step 6 above.**
+
 ## Next Steps
 
 Once all prerequisites are satisfied, proceed to:
 1. [Architecture Overview](overview.md) - Review the system architecture
-2. [Day 0: Infrastructure Deployment](../operations/day0-deployment.md) - Begin deployment
+2. [Quick Start Guide](quickstart.md) - Deploy in 90 minutes
+3. [Day 0: Infrastructure Deployment](../operations/day0-deployment.md) - Comprehensive deployment guide
 
 ## Related Documentation
 
