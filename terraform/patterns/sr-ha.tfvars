@@ -46,7 +46,7 @@ enable_vpc_endpoints = true
 # EKS Configuration
 # ==============================================================================
 
-eks_cluster_version = "1.31"
+eks_cluster_version = "1.34"
 
 # Control Node Group (coderd)
 control_node_instance_type = "m5.large"
@@ -78,7 +78,7 @@ scaling_timezone       = "America/New_York"
 # Aurora PostgreSQL Configuration
 # ==============================================================================
 
-aurora_engine_version        = "16.4"
+aurora_engine_version        = "16.6"
 aurora_min_capacity          = 0.5
 aurora_max_capacity          = 16
 aurora_backup_retention_days = 90
@@ -117,7 +117,7 @@ external_auth_client_secret_arn = "" # Optional: Secrets Manager ARN
 # Coder Configuration
 # ==============================================================================
 
-coder_version           = "2.18.0"
+coder_version           = "2.29.1"
 coderd_replicas         = 2 # HA: minimum 2 replicas
 max_workspaces_per_user = 3
 
@@ -126,7 +126,7 @@ max_workspaces_per_user = 3
 # ==============================================================================
 
 log_retention_days           = 90 # Minimum for compliance
-fluent_bit_version           = "0.47.10"
+fluent_bit_version           = "4.2.1"
 enable_container_insights    = true
 enable_prometheus_metrics    = true
 enable_amp_integration       = false

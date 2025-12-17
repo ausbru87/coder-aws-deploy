@@ -46,7 +46,7 @@ enable_vpc_endpoints = false # Cost optimization
 # EKS Configuration
 # ==============================================================================
 
-eks_cluster_version = "1.31"
+eks_cluster_version = "1.34"
 
 # Control Node Group (coderd) - Minimal HA
 control_node_instance_type = "m5.large"
@@ -78,7 +78,7 @@ scaling_timezone       = "America/New_York"
 # Aurora PostgreSQL Configuration
 # ==============================================================================
 
-aurora_engine_version        = "16.4"
+aurora_engine_version        = "16.6"
 aurora_min_capacity          = 0.5
 aurora_max_capacity          = 4 # Lower max for cost optimization
 aurora_backup_retention_days = 7 # Shorter retention for dev
@@ -108,7 +108,7 @@ oidc_client_secret_arn = "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret/..."  
 # Coder Configuration
 # ==============================================================================
 
-coder_version           = "2.18.0"
+coder_version           = "2.29.1"
 coderd_replicas         = 1 # Non-HA for dev
 max_workspaces_per_user = 5 # Higher limit for dev/test
 

@@ -121,10 +121,10 @@ Complete documentation is located in [`/docs/`](docs/README.md):
 
 ## 🔧 Requirements
 
-- **Terraform:** >= 1.9.0
+- **Terraform:** >= 1.14.0
 - **AWS CLI:** >= 2.0
-- **kubectl:** >= 1.29
-- **Helm:** >= 3.0
+- **kubectl:** >= 1.31
+- **Helm:** >= 3.1
 - **AWS Account:** With appropriate service quotas
 - **Coder License:** Premium license required
 
@@ -178,11 +178,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## 🏷️ Version
 
-**Version:** 1.0.0  
-**Release Date:** 2025-01-16  
-**Coder Version:** 2.13.0+  
-**Terraform Version:** >= 1.9.0  
-**AWS Provider:** >= 5.0.0
+**Version:** 1.0.0
+**Release Date:** 2025-01-16
+**Coder Version:** 2.29.1 (ESR)
+**Terraform Version:** >= 1.14.0
+**AWS Provider:** ~> 6.26
+**Kubernetes:** 1.34
+**Aurora PostgreSQL:** 16.6
 
 ---
 

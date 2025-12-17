@@ -9,7 +9,7 @@
 # - Supporting AWS services (Route 53, ACM, Secrets Manager, CloudWatch)
 
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.14.0"
 
   required_providers {
     aws = {

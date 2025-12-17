@@ -1,6 +1,6 @@
 module github.com/example/coder-deployment-guide/test
 
-go 1.24
+go 1.25
 
 require (
 	github.com/gruntwork-io/terratest v0.47.2
