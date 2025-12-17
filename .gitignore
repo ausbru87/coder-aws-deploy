@@ -40,3 +40,8 @@ Thumbs.db
 tmp/
 temp/
 .tmp/
+
+# Claude Code
+.kiro/
+CLAUDE.md
+.claude/
