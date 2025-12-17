@@ -1,0 +1,17 @@
+# Terraform Backend Configuration for Development Environment
+#
+# This file configures remote state storage in S3 with DynamoDB state locking.
+#
+# Usage:
+#   1. Copy this file: cp dev.hcl.example dev.hcl
+#   2. Update the values below with your AWS resources
+#   3. Initialize: terraform init -backend-config=backend-config/dev.hcl
+#
+# IMPORTANT: The S3 bucket and DynamoDB table MUST exist before running terraform init
+# See documentation for setup instructions
+
+bucket         = "your-org-coder-terraform-state"  # S3 bucket name (can be same as prod)
+key            = "coder/dev/terraform.tfstate"     # Different path for dev environment
+region         = "us-east-1"                       # AWS region where bucket is located
+encrypt        = true                              # Enable state encryption at rest
+dynamodb_table = "coder-terraform-locks"           # DynamoDB table for state locking (can be same as prod)

@@ -15,6 +15,7 @@ This document outlines the tools, AWS configurations, service quotas, licenses, 
 5. **[DNS and Certificate Requirements](#dns-and-certificate-requirements)** - Prepare domain and decide on Coder URL (5 min)
 6. **[Identity Provider Requirements](#identity-provider-requirements)** - Set up OIDC application with correct redirect URI (20-30 min)
 7. **Create AWS Secrets** - Store OIDC credentials and license in Secrets Manager (5 min)
+8. **Create Terraform Backend** - Create S3 bucket and DynamoDB table for state storage (5 min)
 
 **Then proceed to:** [Day 0: Infrastructure Deployment](../operations/day0-deployment.md)
 

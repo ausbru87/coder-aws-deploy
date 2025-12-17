@@ -1,0 +1,20 @@
+# Terraform Backend Configuration for Production Environment
+#
+# This file configures remote state storage in S3 with DynamoDB state locking.
+#
+# Usage:
+#   1. Copy this file: cp prod.hcl.example prod.hcl
+#   2. Update the values below with your AWS resources
+#   3. Initialize: terraform init -backend-config=backend-config/prod.hcl
+#
+# IMPORTANT: The S3 bucket and DynamoDB table MUST exist before running terraform init
+# See Step 0.4 in the Quick Start Guide for setup instructions
+
+bucket         = "your-org-coder-terraform-state"  # S3 bucket name (must be globally unique)
+key            = "coder/prod/terraform.tfstate"    # Path within bucket for state file
+region         = "us-east-1"                       # AWS region where bucket is located
+encrypt        = true                              # Enable state encryption at rest
+dynamodb_table = "coder-terraform-locks"           # DynamoDB table for state locking
+
+# Optional: KMS key for encryption (recommended for production)
+# kms_key_id = "arn:aws:kms:us-east-1:ACCOUNT_ID:key/KEY_ID"

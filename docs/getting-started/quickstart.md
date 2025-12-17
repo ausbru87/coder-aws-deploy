@@ -1,6 +1,6 @@
-# 90-Minute SR-HA Deployment Quickstart
+# SR-HA Deployment Quickstart
 
-This guide provides a streamlined path to deploying the SR-HA pattern in approximately 90 minutes.
+This guide provides a streamlined path to deploying the SR-HA pattern in approximately 95 minutes.
 
 ## Prerequisites (5 minutes)
 
@@ -93,13 +93,54 @@ aws secretsmanager create-secret \
 
 ### Step 0.3: Verify Route 53 Hosted Zone (2 minutes)
 
+**⚠️ REQUIRED:** A Route 53 hosted zone for your domain MUST exist before deployment.
+
 ```bash
 # Verify your domain's hosted zone exists
 aws route53 list-hosted-zones-by-name --dns-name example.com
 
-# Note the hosted zone ID - you can use it for route53_zone_id variable
-# Or leave route53_zone_id empty for automatic lookup
+# Expected output: Should show your hosted zone
+# If not found, create one:
+# aws route53 create-hosted-zone --name example.com --caller-reference $(date +%s)
+
+# Note the hosted zone ID (optional - Terraform can auto-lookup)
 ```
+
+**What you need from this step:**
+- ✅ Route 53 hosted zone exists for your domain
+- ✅ (Optional) Hosted zone ID for `route53_zone_id` variable
+
+### Step 0.4: Create Terraform Backend (5 minutes)
+
+**⚠️ REQUIRED:** S3 bucket and DynamoDB table must exist before running `terraform init`.
+
+```bash
+# 1. Create S3 bucket for Terraform state (must be globally unique)
+aws s3 mb s3://your-org-coder-terraform-state --region us-east-1
+
+# 2. Enable versioning (required for state recovery)
+aws s3api put-bucket-versioning \
+  --bucket your-org-coder-terraform-state \
+  --versioning-configuration Status=Enabled
+
+# 3. Create DynamoDB table for state locking
+aws dynamodb create-table \
+  --table-name coder-terraform-locks \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --region us-east-1
+
+# 4. Create backend config file (from terraform/ directory)
+cd terraform
+cp backend-config/prod.hcl.example backend-config/prod.hcl
+vim backend-config/prod.hcl  # Update bucket name to match your S3 bucket
+```
+
+**What you need from this step:**
+- ✅ S3 bucket created and versioning enabled
+- ✅ DynamoDB table created
+- ✅ `backend-config/prod.hcl` file configured with your bucket name
 
 ---
 
@@ -140,12 +181,16 @@ coder_subdomain = "coder"                   # Must match Step 0.1
 ### Step 2: Initialize Terraform (2 minutes)
 
 ```bash
-# Configure backend (first time only)
-vim backend-config/prod.hcl  # Add your S3 bucket
-
-# Initialize
+# Initialize with backend configuration (using config from Step 0.4)
 terraform init -backend-config=backend-config/prod.hcl
+
+# Expected output: "Terraform has been successfully initialized!"
 ```
+
+**If initialization fails:**
+- ❌ `bucket does not exist` → Complete Step 0.4 (create S3 bucket)
+- ❌ `table does not exist` → Complete Step 0.4 (create DynamoDB table)
+- ❌ `backend-config/prod.hcl: no such file` → Complete Step 0.4 (create backend config file)
 
 ### Step 3: Deploy Infrastructure (35 minutes)
 
@@ -234,13 +279,14 @@ After deployment completes:
 |-------|----------|-----------|
 | **Step 0.1**: OIDC Setup | 20-30 min | ❌ No - Required |
 | **Step 0.2**: Secrets Creation | 5 min | ❌ No - Required |
-| **Step 0.3**: DNS Verification | 2 min | ✅ Yes - Auto-lookup |
+| **Step 0.3**: DNS Verification | 2 min | ❌ No - Required |
+| **Step 0.4**: Backend Setup | 5 min | ❌ No - Required |
 | **Step 1**: Clone & Configure | 5 min | ❌ No |
 | **Step 2**: Terraform Init | 2 min | ❌ No |
 | **Step 3**: Deploy Infrastructure | 35 min | ❌ No |
 | **Step 4**: Configure kubectl | 3 min | ❌ No |
 | **Step 5**: Verify Login | 2 min | ❌ No |
-| **Total** | **~90 minutes** | |
+| **Total** | **~95 minutes** | |
 
 ## Next Steps
 
@@ -276,8 +322,8 @@ For comprehensive deployment procedures, see:
 
 ---
 
-**Total Time: ~90 minutes**
-- Pre-Terraform setup (OIDC + Secrets): ~30 minutes
+**Total Time: ~95 minutes**
+- Pre-Terraform setup (OIDC + Secrets + DNS + Backend): ~40 minutes
 - Infrastructure provisioning: ~35 minutes
 - Configuration and verification: ~10 minutes
-- Remaining: Configuration and planning: ~15 minutes
+- Remaining: Planning and contingency: ~10 minutes

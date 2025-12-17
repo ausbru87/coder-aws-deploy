@@ -13,6 +13,7 @@ override.tf.json
 
 # Sensitive files
 **/backend-config/*.hcl
+!**/backend-config/*.hcl.example
 secrets/
 *.pem
 *.key

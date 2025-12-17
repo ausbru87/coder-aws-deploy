@@ -133,11 +133,17 @@ aws secretsmanager list-secrets --region us-east-1 | grep coder
 
 ### Step 1.3: Verify Route 53 Hosted Zone
 
+**⚠️ REQUIRED:** A Route 53 hosted zone for your domain MUST exist before deployment.
+
 ```bash
 # Verify your domain's hosted zone exists
 aws route53 list-hosted-zones-by-name --dns-name example.com
 
-# Note the hosted zone ID (optional - can auto-lookup)
+# Expected output: Should show your hosted zone with HostedZoneId and Name
+# If not found, create one:
+# aws route53 create-hosted-zone --name example.com --caller-reference $(date +%s)
+
+# Note the hosted zone ID (optional - Terraform can auto-lookup)
 ```
 
 ### Step 1.4: Request or Verify ACM Certificate (Optional)
@@ -155,6 +161,51 @@ aws acm request-certificate \
 # Validate via DNS (add CNAME records to Route 53)
 # Certificate ARN will be used in variables
 ```
+
+### Step 1.5: Create Terraform Backend
+
+**⚠️ REQUIRED:** S3 bucket and DynamoDB table must exist before running `terraform init`.
+
+```bash
+# 1. Create S3 bucket for Terraform state (must be globally unique)
+aws s3 mb s3://your-org-coder-terraform-state --region us-east-1
+
+# 2. Enable versioning (required for state recovery)
+aws s3api put-bucket-versioning \
+  --bucket your-org-coder-terraform-state \
+  --versioning-configuration Status=Enabled
+
+# 3. Enable encryption
+aws s3api put-bucket-encryption \
+  --bucket your-org-coder-terraform-state \
+  --server-side-encryption-configuration '{
+    "Rules": [{
+      "ApplyServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+      }
+    }]
+  }'
+
+# 4. Block public access
+aws s3api put-public-access-block \
+  --bucket your-org-coder-terraform-state \
+  --public-access-block-configuration \
+    "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+
+# 5. Create DynamoDB table for state locking
+aws dynamodb create-table \
+  --table-name coder-terraform-locks \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --region us-east-1
+
+# 6. Verify resources were created
+aws s3 ls | grep coder-terraform-state
+aws dynamodb list-tables | grep coder-terraform-locks
+```
+
+**Note the bucket name** - you'll need it for the next phase.
 
 ---
 
@@ -180,21 +231,28 @@ cd coder-infrastructure/terraform
 # If quotas insufficient, request increases before proceeding
 ```
 
-### Step 2.3: Configure Backend
+### Step 2.3: Configure Backend File
+
+**Prerequisite:** S3 bucket and DynamoDB table created in Phase 1, Step 1.5.
 
 ```bash
-# First-time setup: Create S3 bucket for state
-aws s3 mb s3://your-org-coder-terraform-state --region us-east-1
+# Navigate to terraform directory
+cd terraform
 
-# Create DynamoDB table for locking
-aws dynamodb create-table \
-  --table-name coder-terraform-locks \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST \
-  --region us-east-1
+# Create backend config from template
+cp backend-config/prod.hcl.example backend-config/prod.hcl
 
-# Update backend-config/prod.hcl with your bucket name
+# Update with your S3 bucket name
+vim backend-config/prod.hcl
+```
+
+**Update these values in `backend-config/prod.hcl`:**
+```hcl
+bucket         = "your-org-coder-terraform-state"  # From Step 1.5
+key            = "coder/prod/terraform.tfstate"
+region         = "us-east-1"
+encrypt        = true
+dynamodb_table = "coder-terraform-locks"           # From Step 1.5
 ```
 
 ### Step 2.4: Initialize Terraform
@@ -203,9 +261,17 @@ aws dynamodb create-table \
 # Initialize with backend configuration
 terraform init -backend-config=backend-config/prod.hcl
 
+# Expected output: "Terraform has been successfully initialized!"
+
 # Verify initialization
 terraform providers
 ```
+
+**Common initialization errors:**
+- ❌ `bucket does not exist` → Complete Phase 1, Step 1.5 (create S3 bucket)
+- ❌ `table does not exist` → Complete Phase 1, Step 1.5 (create DynamoDB table)
+- ❌ `backend-config/prod.hcl: no such file or directory` → Complete Step 2.3 (create backend config file)
+- ❌ `access denied` → Verify AWS credentials have S3 and DynamoDB permissions
 
 ---
 
